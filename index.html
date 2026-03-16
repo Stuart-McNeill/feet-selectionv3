@@ -6,28 +6,17 @@
     <title>3D Foot Region Mapper</title>
     <style>
         body { margin: 0; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #050505; color: white; }
-        
-        /* UI Overlay */
         #ui-layer { position: absolute; top: 15px; left: 15px; z-index: 10; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
         .panel { background: rgba(20, 20, 20, 0.85); padding: 15px; border-radius: 8px; border: 1px solid #444; pointer-events: auto; min-width: 220px; }
-        
         h2 { margin: 0 0 10px 0; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #00f2ff; }
         .group { display: flex; gap: 5px; margin-bottom: 10px; }
-        
-        button { 
-            background: #333; color: white; border: none; padding: 8px 12px; border-radius: 4px; 
-            cursor: pointer; font-size: 12px; transition: background 0.2s; flex: 1;
-        }
+        button { background: #333; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: background 0.2s; flex: 1; }
         button:hover { background: #444; }
         button.active { background: #00f2ff; color: #000; font-weight: bold; }
-        
         #status { font-family: monospace; font-size: 11px; color: #888; margin-top: 5px; }
         #coords { font-weight: bold; color: #ff4400; margin-top: 5px; font-size: 13px; }
-
-        /* Edit Panel */
-        #edit-panel { display: none; margin-top: 10px; border-top: 1px solid #444; pt: 10px; }
+        #edit-panel { display: none; margin-top: 10px; border-top: 1px solid #444; padding-top: 10px; }
         input { background: #111; border: 1px solid #444; color: white; padding: 5px; border-radius: 4px; width: calc(100% - 12px); margin-bottom: 10px; }
-
         #controls-hint { position: absolute; bottom: 15px; right: 15px; font-size: 11px; color: #666; text-align: right; }
     </style>
 </head>
@@ -38,28 +27,22 @@
         <h2>Foot Selection</h2>
         <div class="group">
             <button id="leftBtn">LEFT FOOT</button>
-            <button id="rightBtn">RIGHT FOOT</button>
+            <button id="rightBtn" class="active">RIGHT FOOT</button>
         </div>
-
         <h2>Tools</h2>
         <div class="group">
             <button id="rotateBtn" class="active">VIEW</button>
             <button id="drawBtn">MARK</button>
             <button id="undoBtn">UNDO</button>
         </div>
-        
-        <div class="group">
-            <button id="clearMarkersBtn">CLEAR ALL MARKS</button>
-        </div>
-
-        <div id="status">Initializing...</div>
+        <div class="group"><button id="clearMarkersBtn">CLEAR ALL MARKS</button></div>
+        <div id="status">Initializing Scene...</div>
         <div id="coords">Region: None</div>
     </div>
 
     <div class="panel">
         <h2>Data Management</h2>
         <button id="toggleEditBtn" style="margin-bottom: 5px; width: 100%;">TOGGLE REGION EDITOR</button>
-        
         <div id="edit-panel">
             <input type="text" id="regionNameInput" placeholder="New Region Name...">
             <div class="group">
@@ -68,7 +51,6 @@
             </div>
             <button id="exportMapBtn" style="width: 100%; background: #224;">EXPORT REGION MAP (JS)</button>
         </div>
-
         <button id="downloadBtn" style="width: 100%; margin-top: 10px; background: #242;">DOWNLOAD REPORT (TXT)</button>
         <button id="clearBtn" style="width: 100%; margin-top: 5px; background: #422;">RESET SCENE</button>
     </div>
@@ -88,12 +70,13 @@
     }
 </script>
 
-<script>
+<script type="module">
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
+// PRESET_REGIONS truncated for brevity, assume your full list goes here
 const PRESET_REGIONS = [
   // --- LEFT FOOT ---
   { name: "Left foot - Dorsal Hallux Toenail", pos: [-0.11115, 0.09737, 0.45403], rot: [0.00000, 0.01032, 0.00000], scale: [0.06768, 0.02560, 0.07894] },
@@ -271,18 +254,15 @@ const urls = {
 let scene, camera, renderer, controls, transformControls;
 let raycaster = new THREE.Raycaster();
 let mouse = new THREE.Vector2();
-
-let currentFoot = "right"; // Starting with right as presets provided are for right
+let currentFoot = "right"; 
 let footGroup = new THREE.Group();
 let markerGroup = new THREE.Group();
 let regionGroup = new THREE.Group();
-
 let isLoaded = false;
 let mode = "rotate"; 
 let markerLogs = [];
 
 init();
-loadFoot();
 
 function init() {
     scene = new THREE.Scene();
@@ -313,15 +293,7 @@ function init() {
     // Initial Load of presets
     PRESET_REGIONS.forEach(data => addRegion(data.name, data.pos, data.rot, data.scale));
 
-    window.addEventListener('keydown', (e) => {
-        if (mode !== "edit") return;
-        switch (e.key.toLowerCase()) {
-            case 't': transformControls.setMode("translate"); break;
-            case 'r': transformControls.setMode("rotate"); break;
-            case 's': transformControls.setMode("scale"); break;
-        }
-    });
-
+    // UI Listeners
     document.getElementById("leftBtn").onclick = () => { currentFoot = "left"; loadFoot(); };
     document.getElementById("rightBtn").onclick = () => { currentFoot = "right"; loadFoot(); };
     document.getElementById("rotateBtn").onclick = () => setMode("rotate");
@@ -354,25 +326,30 @@ function init() {
 
     window.addEventListener("resize", onResize);
     renderer.domElement.addEventListener("mousedown", onMouseDown);
+    
+    // Start initial load
+    loadFoot();
     animate();
 }
 
 function loadFoot() {
     isLoaded = false;
-    document.getElementById("status").textContent = "Normalizing Foot...";
+    document.getElementById("status").textContent = "Loading Model...";
     footGroup.clear();
     markerGroup.clear();
     markerLogs = [];
     transformControls.detach();
 
-    new GLTFLoader().load(urls[currentFoot], (gltf) => {
+    const loader = new GLTFLoader();
+    loader.load(urls[currentFoot], (gltf) => {
         const model = gltf.scene;
         model.traverse(c => { 
             if(c.isMesh) {
                 c.material = new THREE.MeshStandardMaterial({ 
                     color: 0xdddddd,
                     transparent: true,
-                    opacity: 0.8 
+                    opacity: 0.8,
+                    depthWrite: true // Fix for transparency raycasting
                 }); 
             }
         });
@@ -383,7 +360,6 @@ function loadFoot() {
         const center = new THREE.Vector3();
         box.getCenter(center);
 
-        // Standardizing position and scale
         model.position.x = -center.x;
         model.position.y = -box.min.y; 
         model.position.z = -center.z;
@@ -402,6 +378,14 @@ function loadFoot() {
         document.getElementById("status").textContent = "READY: " + currentFoot.toUpperCase();
         isLoaded = true;
         filterRegions();
+    }, 
+    (xhr) => {
+        const percent = (xhr.loaded / xhr.total * 100).toFixed(0);
+        document.getElementById("status").textContent = `Loading: ${percent}%`;
+    },
+    (err) => {
+        console.error("Load Error:", err);
+        document.getElementById("status").textContent = "LOAD ERROR - Check Console";
     });
 }
 
@@ -443,7 +427,6 @@ function addRegion(name, pos, rot, scale) {
 function onMouseDown(e) {
     if (!isLoaded || e.button !== 0) return;
     
-    // Calculate mouse position
     const rect = renderer.domElement.getBoundingClientRect();
     mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -452,18 +435,20 @@ function onMouseDown(e) {
 
     if (mode === "edit") {
         const hits = raycaster.intersectObjects(regionGroup.children.filter(b => b.visible));
-        if (hits.length > 0) transformControls.attach(hits[0].object);
+        if (hits.length > 0) {
+            transformControls.attach(hits[0].object);
+        } else {
+            transformControls.detach(); // Deselect if clicking empty space
+        }
     } else if (mode === "draw") {
-        const hits = raycaster.intersectObject(footGroup, true);
+        // Optimized raycasting for foot mesh children
+        const hits = raycaster.intersectObjects(footGroup.children, true);
         if (hits.length > 0) {
             const pos = hits[0].point;
             let region = "Undefined Area";
             
-            // Hit detection for regions
             regionGroup.children.forEach(box => {
                 if (!box.visible) return;
-                
-                // Inverse transform the point to check if inside the box
                 const localPoint = pos.clone().applyMatrix4(box.matrixWorld.clone().invert());
                 if (Math.abs(localPoint.x) < 0.5 && Math.abs(localPoint.y) < 0.5 && Math.abs(localPoint.z) < 0.5) {
                     region = box.userData.name;
